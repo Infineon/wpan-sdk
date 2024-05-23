@@ -124,7 +124,7 @@ pal_status_t pal_i2c_write(const pal_i2c_t * p_i2c_context, uint8_t * p_data, ui
 {
     pal_status_t status = PAL_STATUS_FAILURE;
 
-    LOG_WICED_OPTIGA("pal_i2c_write: ");
+    LOG_WICED_OPTIGA("pal_i2c_write: %u\n", length);
     LOG_WICED_OPTIGA_HEX(p_data, length);
 
     //Acquire the I2C bus before read/write
@@ -179,7 +179,7 @@ pal_status_t pal_i2c_read(const pal_i2c_t * p_i2c_context, uint8_t * p_data, uin
 {
     pal_status_t status = PAL_STATUS_FAILURE;
 
-    LOG_WICED_OPTIGA("pal_i2c_read: ");
+    LOG_WICED_OPTIGA("pal_i2c_read: %u\n", length);
 
     //Acquire the I2C bus before read/write
     if (PAL_STATUS_SUCCESS == pal_i2c_acquire(p_i2c_context))

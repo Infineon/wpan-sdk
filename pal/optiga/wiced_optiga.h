@@ -47,7 +47,6 @@ extern "C" {
 // Include
 //==================================================================================================
 #include <stdint.h>
-#include "wiced.h"
 #include "wiced_result.h"
 
 //==================================================================================================
@@ -65,7 +64,7 @@ extern "C" {
 { \
     uint16_t i; \
     for(i=0; i<len; i++) \
-        printf("%x ", ptr[i]); \
+        printf(" %02x", ((uint8_t *)ptr)[i]); \
     printf("\n"); \
 }
 #define LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_value) \
@@ -141,36 +140,108 @@ void wiced_optiga_deinit(void);
 /*
  * Function         wiced_optiga_read_data
  *
- * @param[in]       id: Optiga object id
+ * @param[in]       optiga_oid: Optiga object id
  *
  * @param[in]       data_type: OPTIGA_OBJECT_DATA for read data; OPTIGA_OBJECT_METADATA for read metadata
  *
- * @param[in]       data_len: read length
- *
  * @param[out]      p_data: data buffer of an output holding read back data
-
- * @param[out]      p_status: output status of the read. WICED_SUCCESS or WICED_ERROR
  *
- * @return          the number of bytes read
+ * @param[in,out]   length: Valid pointer to the length of data to be read from data object
+ *                          When the data is successfully retrieved, it is updated with actual data length retrieved
+ *
+ * @return          output status of the read. WICED_SUCCESS or WICED_ERROR
  */
-uint16_t wiced_optiga_read_data(uint16_t id, uint8_t data_type, uint16_t data_len, uint8_t *p_data, wiced_result_t *p_status);
+wiced_result_t wiced_optiga_read_data(uint16_t optiga_oid, uint8_t data_type, void *p_data, uint16_t *length);
 
 /*
  * Function         wiced_optiga_write_data
  *
- * @param[in]       id: Optiga object id
+ * @param[in]       optiga_oid: Optiga object id
  *
- * @param[in]       data_type: OPTIGA_OBJECT_DATA for read data; OPTIGA_OBJECT_METADATA for read metadata
- *
- * @param[in]       data_len: write length
+ * @param[in]       data_type: OPTIGA_OBJECT_DATA for write data; OPTIGA_OBJECT_METADATA for write metadata
  *
  * @param[out]      p_data: data buffer of the data to be written
-
- * @param[out]      p_status: output status of the read. WICED_SUCCESS or WICED_ERROR
  *
- * @return          the number of bytes write
+ * @param[in]       length: Length of data to be written
+ *
+ * @return          output status of the write. WICED_SUCCESS or WICED_ERROR
  */
-void wiced_optiga_write_data(uint16_t id, uint8_t data_type, uint16_t data_len, uint8_t *p_data, wiced_result_t *p_status);
+wiced_result_t wiced_optiga_write_data(uint16_t optiga_oid, uint8_t data_type, const void *p_data, uint16_t length);
+
+/**
+ * @brief Initiates the start of protected update of object by writing manifest into OPTIGA object.
+ *
+ * @param[in]       manifest_version: Version of manifest to be written
+ *
+ * @param[in]       manifest: Valid pointer to the buffer which contains manifest
+ *
+ * @param[in]       manifest_length: Length of manifest to be written
+ *
+ * @return          output status of the update. WICED_SUCCESS or WICED_ERROR
+ */
+wiced_result_t wiced_optiga_protected_update_start(uint8_t manifest_version, const uint8_t *manifest, uint16_t manifest_length);
+
+/**
+ * @brief Sends fragment(s) of data to be written to OPTIGA.
+ *
+ * @param[in]       fragment: Valid pointer to the buffer which contains fragment
+ *
+ * @param[in]       fragment_length: Length of fragment to be written
+ *
+ * @return          output status of the update. WICED_SUCCESS or WICED_ERROR
+ */
+wiced_result_t wiced_optiga_protected_update_continue(const uint8_t *fragment, uint16_t fragment_length);
+
+/**
+ * @brief Sends the last fragment to finalize the protected update of data object.
+ *
+ * @param[in]       fragment: Valid pointer to the buffer which contains the last fragment.
+ *
+ * @param[in]       fragment_length: Length of fragment to be written
+ *
+ * @return          output status of the update. WICED_SUCCESS or WICED_ERROR
+ */
+wiced_result_t wiced_optiga_protected_update_final(const uint8_t *fragment, uint16_t fragment_length);
+
+ /**
+ * @brief Generates a signature for the given digest.
+ *
+ * @param[in]       digest: Digest on which signature is generated.
+ *
+ * @param[in]       digest_length: Length of the input digest.
+ *
+ * @param[in]       private_key: Private key OID to generate signature.
+ *
+ * @param[in,out]   signature: Pointer to store generated signature, must not be NULL.
+ *
+ * @param[in,out]   signature_length: Length of signature. Initial value set as length of buffer, later updated as the actual length of generated signature.
+ *
+ * @return          output status of the update. WICED_SUCCESS or WICED_ERROR
+ */
+wiced_result_t wiced_optiga_ecdsa_sign(const void *digest, uint8_t digest_length, uint16_t private_key, void *signature, uint16_t *signature_length);
+
+/**
+ * @brief Verifies the signature over the given digest.
+ *
+ * @param[in]       digest: Pointer to a given digest buffer, must not be NULL.
+ *
+ * @param[in]       digest_length: Length of digest.
+ *
+ * @param[in]       signature: Pointer to a given signature buffer, must not be NULL.
+ *
+ * @param[in]       signature_length: Length of signature.
+ *
+ * @param[in]       public_key_source_type: Public key from host / public key of certificate OID from OPTIGA. Value must be one of the below
+ *                                          - #OPTIGA_CRYPT_OID_DATA, if the public key is to used from the certificate data object from OPTIGA.
+ *                                          - #OPTIGA_CRYPT_HOST_DATA  or Non-Zero value , if the public key is provided by host.
+ *
+ * @param[in]       public_key: Public key from host / OID of certificate object. Value must be one of the below
+ *                              - For certificate OID, pointer OID value must be passed.
+ *                              - For Public key from host, pointer to #public_key_from_host_t instance.
+ *
+ * @return          output status of the update. WICED_SUCCESS or WICED_ERROR
+ */
+wiced_result_t wiced_optiga_ecdsa_verify(const uint8_t *digest, uint8_t digest_length, const uint8_t *signature, uint16_t signature_length, uint8_t public_key_source_type, const void *public_key);
 
 #if defined(__cplusplus)
 }

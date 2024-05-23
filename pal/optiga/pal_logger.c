@@ -44,8 +44,7 @@ pal_logger_t logger_console =
 pal_status_t pal_logger_write(void * p_logger_context, const uint8_t * p_log_data, uint32_t log_data_length)
 {
     UNUSED_VARIABLE(p_logger_context);
-    UNUSED_VARIABLE(p_log_data);
     UNUSED_VARIABLE(log_data_length);
-    printf("%*s\n", (int)log_data_length, p_log_data);
+    puts((const char *)p_log_data);
     return PAL_STATUS_SUCCESS;
 }

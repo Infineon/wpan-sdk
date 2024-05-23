@@ -73,6 +73,8 @@
 //Currently set to Creation state(defualt value). At the real time/customer side this needs to be LCSO_STATE_OPERATIONAL (0x07)
 #define FINAL_LCSO_STATE          (LCSO_STATE_CREATION)
 
+//#define WICED_OPTIGA_PAIR_HOST    1
+
 /* Platform Binding Shared Secret (0xE140) Metadata to be updated */
 const uint8_t platform_binding_shared_secret_metadata_final [] = {
     //Metadata to be updated
@@ -102,7 +104,7 @@ const uint8_t platform_binding_shared_secret_metadata_final [] = {
 static volatile optiga_lib_status_t  optiga_lib_status;
 optiga_util_t                       *me_util_instance  = NULL;
 optiga_crypt_t                      *me_crypt_instance = NULL;
-#ifdef OPTIGA_COMMS_SHIELDED_CONNECTION
+#ifdef WICED_OPTIGA_PAIR_HOST
 static uint8_t host_optiga_pairing_completed = FALSE;
 #endif
 
@@ -115,6 +117,7 @@ static void optiga_lib_callback(void * context, optiga_lib_status_t return_statu
     }
 }
 
+#ifdef WICED_OPTIGA_PAIR_HOST
 static optiga_lib_status_t pair_host_and_optiga_using_pre_shared_secret(void)
 {
     uint16_t bytes_to_read;
@@ -247,6 +250,7 @@ static optiga_lib_status_t pair_host_and_optiga_using_pre_shared_secret(void)
 
     return return_status;
 }
+#endif /* WICED_OPTIGA_PAIR_HOST */
 
 void wiced_optiga_init(void)
 {
@@ -254,7 +258,7 @@ void wiced_optiga_init(void)
 
     do
     {
-        LOG_WICED_OPTIGA(__FUNCTION__);
+        LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
 
         /**
          * Create OPTIGA Util and Crypt Instances
@@ -286,7 +290,7 @@ void wiced_optiga_init(void)
 
         WAIT_AND_CHECK_STATUS(return_status, optiga_lib_status);
 
-#ifdef OPTIGA_COMMS_SHIELDED_CONNECTION
+#ifdef WICED_OPTIGA_PAIR_HOST
         if (FALSE == host_optiga_pairing_completed)
         {
             LOG_WICED_OPTIGA("pair_host_and_optiga_using_pre_shared_secret");
@@ -306,7 +310,7 @@ void wiced_optiga_init(void)
 void wiced_optiga_deinit(void)
 {
     optiga_lib_status_t return_status = !OPTIGA_LIB_SUCCESS;
-    LOG_WICED_OPTIGA(__FUNCTION__);
+    LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
 
     if(me_crypt_instance)
     {
@@ -331,39 +335,20 @@ void wiced_optiga_deinit(void)
     }
 }
 
-uint16_t wiced_optiga_read_data(uint16_t id, uint8_t data_type, uint16_t data_len, uint8_t *p_data, wiced_result_t *p_status)
+wiced_result_t wiced_optiga_read_data(uint16_t optiga_oid, uint8_t data_type, void *p_data, uint16_t *length)
 {
     uint32_t time_taken = 0;
-    uint16_t offset, bytes_to_read;
-    uint16_t optiga_oid;
     optiga_lib_status_t return_status = !OPTIGA_LIB_SUCCESS;
 
     if (p_data == NULL)
     {
-        *p_status = WICED_ERROR;
-        return 0;
+        return WICED_ERROR;
     }
 
     do
     {
-        LOG_WICED_OPTIGA(__FUNCTION__);
+        LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
 
-        //Read device end entity certificate from OPTIGA
-        optiga_oid = id;
-        offset = 0x00;
-        bytes_to_read = data_len;
-
-        // OPTIGA Comms Shielded connection settings to enable the protection
-        if (0)//(host_optiga_pairing_completed)
-        {
-            OPTIGA_UTIL_SET_COMMS_PROTOCOL_VERSION(me_util_instance, OPTIGA_COMMS_PROTOCOL_VERSION_PRE_SHARED_SECRET);
-            OPTIGA_UTIL_SET_COMMS_PROTECTION_LEVEL(me_util_instance, OPTIGA_COMMS_RESPONSE_PROTECTION);
-        }
-
-        /**
-         * 2. Read data from a data object (e.g. certificate data object)
-         *    using optiga_util_read_data.
-         */
         optiga_lib_status = OPTIGA_LIB_BUSY;
 
         START_PERFORMANCE_MEASUREMENT(time_taken);
@@ -372,16 +357,16 @@ uint16_t wiced_optiga_read_data(uint16_t id, uint8_t data_type, uint16_t data_le
         {
             return_status = optiga_util_read_data(me_util_instance,
                                                   optiga_oid,
-                                                  offset,
+                                                  0,
                                                   p_data,
-                                                  &bytes_to_read);
+                                                  length);
         }
         else if (data_type == OPTIGA_OBJECT_METADATA)
         {
             return_status = optiga_util_read_metadata(me_util_instance,
                                                       optiga_oid,
                                                       p_data,
-                                                      &bytes_to_read);
+                                                      length);
         }
         else
             return_status = OPTIGA_UTIL_ERROR_INVALID_INPUT;
@@ -390,37 +375,24 @@ uint16_t wiced_optiga_read_data(uint16_t id, uint8_t data_type, uint16_t data_le
 
         READ_PERFORMANCE_MEASUREMENT(time_taken);
 
-        LOG_WICED_OPTIGA(" read data: ");
-        LOG_WICED_OPTIGA_HEX(p_data, bytes_to_read);
+        LOG_WICED_OPTIGA("%s %u\n", __func__, *length);
+        LOG_WICED_OPTIGA_HEX(p_data, *length);
     } while (FALSE);
 
     LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_status);
 
-    if (p_status)
-    {
-        if (return_status == OPTIGA_LIB_SUCCESS)
-            *p_status = WICED_SUCCESS;
-        else
-            *p_status = WICED_ERROR;
-    }
-
-    return bytes_to_read;
+    return return_status == OPTIGA_LIB_SUCCESS ? WICED_SUCCESS : WICED_ERROR;
 }
 
-void wiced_optiga_write_data(uint16_t id, uint8_t data_type, uint16_t data_len, uint8_t *p_data, wiced_result_t *p_status)
+wiced_result_t wiced_optiga_write_data(uint16_t optiga_oid, uint8_t data_type, const void *p_data, uint16_t length)
 {
     uint32_t time_taken = 0;
-    uint16_t optiga_oid;
-    uint16_t offset;
 
     optiga_lib_status_t return_status = !OPTIGA_LIB_SUCCESS;
 
     do
     {
-        LOG_WICED_OPTIGA(__FUNCTION__);
-
-        optiga_oid = id;
-        offset = 0x00;
+        LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
 
         OPTIGA_UTIL_SET_COMMS_PROTECTION_LEVEL(me_util_instance, OPTIGA_COMMS_NO_PROTECTION);
 
@@ -433,16 +405,16 @@ void wiced_optiga_write_data(uint16_t id, uint8_t data_type, uint16_t data_len, 
             return_status = optiga_util_write_data(me_util_instance,
                                                    optiga_oid,
                                                    OPTIGA_UTIL_ERASE_AND_WRITE,
-                                                   offset,
+                                                   0,
                                                    p_data,
-                                                   data_len);
+                                                   length);
         }
         else if (data_type == OPTIGA_OBJECT_METADATA)
         {
             return_status = optiga_util_write_metadata(me_util_instance,
                                                        optiga_oid,
                                                        p_data,
-                                                       data_len);
+                                                       length);
         }
         else
             return_status = OPTIGA_UTIL_ERROR_INVALID_INPUT;
@@ -455,11 +427,117 @@ void wiced_optiga_write_data(uint16_t id, uint8_t data_type, uint16_t data_len, 
 
     LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_status);
 
-    if (p_status)
-    {
-        if (return_status == OPTIGA_LIB_SUCCESS)
-            *p_status = WICED_SUCCESS;
-        else
-            *p_status = WICED_ERROR;
-    }
+    return return_status == OPTIGA_LIB_SUCCESS ? WICED_SUCCESS : WICED_ERROR;
+}
+
+wiced_result_t wiced_optiga_protected_update_start(uint8_t manifest_version, const uint8_t *manifest, uint16_t manifest_length)
+{
+    optiga_lib_status_t return_status = !OPTIGA_LIB_SUCCESS;
+    uint32_t time_taken = 0;
+
+    LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
+
+    optiga_lib_status = OPTIGA_LIB_BUSY;
+
+    START_PERFORMANCE_MEASUREMENT(time_taken);
+
+    return_status = optiga_util_protected_update_start(me_util_instance,
+                                                       manifest_version,
+                                                       manifest,
+                                                       manifest_length);
+
+    WAIT_AND_CHECK_STATUS(return_status, optiga_lib_status);
+
+    READ_PERFORMANCE_MEASUREMENT(time_taken);
+    LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_status);
+
+    return return_status == OPTIGA_LIB_SUCCESS ? WICED_SUCCESS : WICED_ERROR;
+}
+
+wiced_result_t wiced_optiga_protected_update_continue(const uint8_t *fragment, uint16_t fragment_length)
+{
+    optiga_lib_status_t return_status = !OPTIGA_LIB_SUCCESS;
+    uint32_t time_taken = 0;
+
+    LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
+
+    optiga_lib_status = OPTIGA_LIB_BUSY;
+
+    START_PERFORMANCE_MEASUREMENT(time_taken);
+
+    return_status = optiga_util_protected_update_continue(me_util_instance,
+                                                       fragment,
+                                                       fragment_length);
+
+    WAIT_AND_CHECK_STATUS(return_status, optiga_lib_status);
+
+    READ_PERFORMANCE_MEASUREMENT(time_taken);
+    LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_status);
+
+    return return_status == OPTIGA_LIB_SUCCESS ? WICED_SUCCESS : WICED_ERROR;
+}
+
+wiced_result_t wiced_optiga_protected_update_final(const uint8_t *fragment, uint16_t fragment_length)
+{
+    optiga_lib_status_t return_status = !OPTIGA_LIB_SUCCESS;
+    uint32_t time_taken = 0;
+
+    LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
+
+    optiga_lib_status = OPTIGA_LIB_BUSY;
+
+    START_PERFORMANCE_MEASUREMENT(time_taken);
+
+    return_status = optiga_util_protected_update_final(me_util_instance,
+                                                       fragment,
+                                                       fragment_length);
+
+    WAIT_AND_CHECK_STATUS(return_status, optiga_lib_status);
+
+    READ_PERFORMANCE_MEASUREMENT(time_taken);
+    LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_status);
+
+    return return_status == OPTIGA_LIB_SUCCESS ? WICED_SUCCESS : WICED_ERROR;
+}
+
+wiced_result_t wiced_optiga_ecdsa_sign(const void *digest, uint8_t digest_length, uint16_t private_key, void *signature, uint16_t *signature_length)
+{
+    optiga_lib_status_t return_status;
+    uint32_t time_taken = 0;
+
+    LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
+
+    optiga_lib_status = OPTIGA_LIB_BUSY;
+
+    START_PERFORMANCE_MEASUREMENT(time_taken);
+
+    return_status = optiga_crypt_ecdsa_sign(me_crypt_instance, digest, digest_length, private_key, signature, signature_length);
+
+    WAIT_AND_CHECK_STATUS(return_status, optiga_lib_status);
+
+    READ_PERFORMANCE_MEASUREMENT(time_taken);
+    LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_status);
+
+    return return_status == OPTIGA_LIB_SUCCESS ? WICED_SUCCESS : WICED_ERROR;
+}
+
+wiced_result_t wiced_optiga_ecdsa_verify(const uint8_t *digest, uint8_t digest_length, const uint8_t *signature, uint16_t signature_length, uint8_t public_key_source_type, const void *public_key)
+{
+    optiga_lib_status_t return_status;
+    uint32_t time_taken = 0;
+
+    LOG_WICED_OPTIGA("%s\n", __FUNCTION__);
+
+    optiga_lib_status = OPTIGA_LIB_BUSY;
+
+    START_PERFORMANCE_MEASUREMENT(time_taken);
+
+    return_status = optiga_crypt_ecdsa_verify(me_crypt_instance, digest, digest_length, signature, signature_length, public_key_source_type, public_key);
+
+    WAIT_AND_CHECK_STATUS(return_status, optiga_lib_status);
+
+    READ_PERFORMANCE_MEASUREMENT(time_taken);
+    LOG_WICED_OPTIGA_PERFORMANCE(time_taken, return_status);
+
+    return return_status == OPTIGA_LIB_SUCCESS ? WICED_SUCCESS : WICED_ERROR;
 }
