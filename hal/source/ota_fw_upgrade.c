@@ -228,7 +228,9 @@ typedef struct upgrade_xs
 extern const CONFIG_INFO_t g_config_Info;
 
 static uint32_t upgrade_location_write(uint32_t offset, const uint8_t * data, uint32_t len);
+#if BOARD_USE_EXTERNAL_FLASH
 static uint32_t upgrade_location_ext_flash_write(uint32_t offset, const uint8_t * data, uint32_t len);
+#endif // BOARD_USE_EXTERNAL_FLASH
 static bool lzss_decompress(const void * src, size_t n, bool (*data_reader)(const void *, size_t, uint8_t *, uint32_t),
                             bool (*data_writer)(uint32_t, int)) __attribute__((section(".text_in_ram")));
 static bool dest_data_writer(uint32_t data_offset, int c) __attribute__((section(".text_in_ram")));
@@ -237,8 +239,10 @@ static bool src_data_reader(const void * src, size_t n, uint8_t * compressed_buf
 static uint32_t calc_crc32(const uint8_t * buf, uint32_t len) __attribute__((section(".text_in_ram")));
 static uint32_t ef_offset(uint32_t offset) __attribute__((section(".text_in_ram")));
 static uint32_t upgrade_ds_location(void);
+#if BOARD_USE_EXTERNAL_FLASH
 static void spi_pin_config(void) __attribute__((section(".text_in_ram")));
 static void spi_pin_reset(void) __attribute__((section(".text_in_ram")));
+#endif // BOARD_USE_EXTERNAL_FLASH
 
 #if BOARD_USE_EXTERNAL_FLASH
 static uint32_t ext_flash_upgrade_address = 0;
@@ -449,6 +453,7 @@ uint32_t upgrade_location_write(uint32_t offset, const uint8_t * data, uint32_t 
     }
 }
 
+#if BOARD_USE_EXTERNAL_FLASH
 uint32_t upgrade_location_ext_flash_write(uint32_t offset, const uint8_t * data, uint32_t len)
 {
     printf("(ext_flash) write: offset: 0x%08lx len: %lu\n", offset, len);
@@ -463,6 +468,7 @@ uint32_t upgrade_location_ext_flash_write(uint32_t offset, const uint8_t * data,
         return 0;
     }
 }
+#endif // BOARD_USE_EXTERNAL_FLASH
 
 bool wiced_firmware_upgrade_finalize(void)
 {
@@ -545,6 +551,14 @@ bool wiced_firmware_upgrade_apply(void)
 
 void wiced_firmware_upgrade_abort(void) {}
 
+/*
+ * /brief de-compress the image and write the image to target flash
+ *
+ * @param[in]   src         : start address of compressed image
+ * @param[in]   n           : size of compressed image
+ * @param[in]   data_reader : function to read compressed image
+ * @param[in]   data_writer : function to write de-compressed image to target flash
+ */
 bool lzss_decompress(const void * src, size_t n, bool (*data_reader)(const void *, size_t, uint8_t *, uint32_t),
                      bool (*data_writer)(uint32_t, int))
 {
@@ -579,7 +593,10 @@ bool lzss_decompress(const void * src, size_t n, bool (*data_reader)(const void 
     r     = N - F;
     flags = 0;
 
-    cy_serial_flash_read((uint32_t) src, compressed_buf, DECOMPRESS_BUF_SIZE); // 1st 256 bytes
+    if (!data_reader(src, n, compressed_buf, read_byte_count))  // 1st 256 bytes
+    {
+        return FALSE;
+    }
 
     while (read_byte_count < n)
     {
@@ -660,6 +677,15 @@ bool lzss_decompress(const void * src, size_t n, bool (*data_reader)(const void 
     return data_writer(dc_offset, EOF);
 }
 
+/*
+ * \brief Read compressed image data from eflash or external flash.
+ *        This utility will read maximum DECOMPRESS_BUF_SIZE bytes in each execution.
+ *
+ * @param[in]   src             : start address of compressed image
+ * @param[in]   n               : size/length of compressed image
+ * @param[out]  compressed_buf  : buffer to stored the read compressed image
+ * @param[in]   read_byte_count : size/length of compressed image that has already been read
+ */
 bool src_data_reader(const void * src, size_t n, uint8_t * compressed_buf, uint32_t read_byte_count)
 {
 
@@ -668,10 +694,17 @@ bool src_data_reader(const void * src, size_t n, uint8_t * compressed_buf, uint3
 
     if (read_size > 0)
     {
+#if BOARD_USE_EXTERNAL_FLASH
         if (cy_serial_flash_read((uint32_t) src + read_byte_count, compressed_buf, read_size) != FLASH_NOR_RET_SUCCESS)
         {
             return FALSE;
         }
+#else // !BOARD_USE_EXTERNAL_FLASH
+        if (wiced_hal_eflash_read(ef_offset((uint32_t) src + read_byte_count), compressed_buf, read_size) != WICED_SUCCESS)
+        {
+            return FALSE;
+        }
+#endif // BOARD_USE_EXTERNAL_FLASH
     }
     return TRUE;
 }
@@ -742,6 +775,7 @@ uint32_t upgrade_ds_location(void)
     }
 }
 
+#if BOARD_USE_EXTERNAL_FLASH
 void spi_pin_config(void)
 {
     wiced_hal_gpio_select_function(PLATFORM_SPI_2_CS, WICED_SPI_2_CS);
@@ -757,10 +791,15 @@ void spi_pin_reset(void)
     wiced_hal_gpio_select_function(PLATFORM_SPI_2_MOSI, WICED_GPIO);
     wiced_hal_gpio_select_function(PLATFORM_SPI_2_SCLK, WICED_GPIO);
 }
+#endif // BOARD_USE_EXTERNAL_FLASH
 
 /* Dummy stub */
 wiced_bool_t wiced_ota_fw_upgrade_init(void * public_key, wiced_ota_firmware_upgrade_status_callback_t * p_status_callback,
                                        wiced_ota_firmware_upgrade_send_data_callback_t * p_send_data_callback)
 {
+    (void) (public_key);
+    (void) (p_status_callback);
+    (void) (p_send_data_callback);
+
     return TRUE;
 }
