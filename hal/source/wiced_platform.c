@@ -35,9 +35,7 @@
 #include "cycfg_pins.h"
 #include "platform_retarget_lock.h"
 #include "spar_utils.h"
-#ifdef BLE_OTA_FW_UPGRADE
 #include <wiced_bt_ota_firmware_upgrade.h>
-#endif
 #include "wiced_bt_stack.h"
 #include "wiced_hal_cpu_clk.h"
 #include "wiced_hal_duart.h"
@@ -251,12 +249,10 @@ static wiced_result_t wiced_platform_bt_management_callback(wiced_bt_management_
             return status;
         }
 
-#ifdef BLE_OTA_FW_UPGRADE
         if (!wiced_ota_fw_upgrade_init(NULL, NULL, NULL))
         {
             printf("wiced_ota_fw_upgrade_init failed\n");
         }
-#endif
 
         /* Disable watchdog.*/
         wiced_hal_wdog_disable();

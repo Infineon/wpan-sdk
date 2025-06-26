@@ -208,6 +208,7 @@ typedef struct _FLASH_SETTINGS_CFG
     uint32_t wait_max_retry;        /* Maximum retry for both SPIC busy bit & flash WIP bit */
     uint32_t erase_max_retry;
     uint32_t sw_reset_delay_us;
+    uint32_t boot_sw_reset_max_retry;
 } flash_settings_cfg_t;
 
 typedef struct _PACKED_ _FLASH_NOR_QUERY_INFO_TABLE_STRUCT

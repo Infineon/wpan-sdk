@@ -339,7 +339,7 @@ bool wiced_firmware_upgrade_prepare(void)
 
 #if BOARD_USE_EXTERNAL_FLASH
     /* external flash driver init */
-    printf("Externl_flash Init...\n");
+    printf("External_flash Init...\n");
     if (cy_serial_flash_init() != FLASH_NOR_RET_SUCCESS)
     {
         return false;

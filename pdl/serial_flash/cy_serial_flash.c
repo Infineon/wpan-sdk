@@ -72,6 +72,7 @@ const flash_settings_cfg_t flash_cfg =
 {
     .wait_max_retry = 10000000,
     .sw_reset_delay_us = 60,        /* GD requires maximum delay, which is about 60 us */
+    .boot_sw_reset_max_retry = 100, /* Maximum retry for bootloader software reset */
 };
 
 static const flash_nor_query_info_table_struct_t flash_nor_query_info_table[] =
@@ -402,18 +403,32 @@ __attribute__((section(".text_in_ram"))) cy_serial_flash_ret_type_t flash_nor_wa
 __attribute__((section(".text_in_ram"))) cy_serial_flash_ret_type_t cy_serial_flash_init(void)
 {
     cy_serial_flash_ret_type_t ret = FLASH_NOR_RET_UNKNOWN;
+    uint32_t max_retry = flash_cfg.boot_sw_reset_max_retry;
+    uint32_t rdid;    
 
     flash_nor_reset_exist();
 
-    if((ret = flash_nor_sw_reset()) != FLASH_NOR_RET_SUCCESS)
+    do
     {
-        return ret;
-    }
+        if ((ret = flash_nor_sw_reset()) != FLASH_NOR_RET_SUCCESS)
+        {
+            // early return if sw reset failed
+            return ret;
+        }
 
-    uint32_t rdid = flash_nor_get_rdid();
-    if (rdid == 0)
+        rdid = flash_nor_get_rdid();
+
+        if ((((rdid & 0x00FF0000) >> 16) != 0))
+        {
+            // early return if successful read RDID for manufactor is none zero
+            break;
+        }
+        max_retry--;
+    } while (max_retry > 0);
+
+    if (max_retry == 0)
     {
-        return FLASH_NOR_RET_CMD_NOT_SUPPORT;
+        return FLASH_NOR_RET_UNKNOWN;
     }
 
     flash_nor_set_exist(FLASH_NOR_EXIST_BASIC_CMD);

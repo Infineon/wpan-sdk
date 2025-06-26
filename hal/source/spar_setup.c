@@ -39,9 +39,7 @@
 #include "sparcommon.h"
 #include <stdio.h>
 #include <sys/unistd.h>
-#ifdef BLE_OTA_FW_UPGRADE
 #include <ota_fw_upgrade.h>
-#endif
 #include <wiced_hal_platform.h>
 #include <wiced_hal_wdog.h>
 #include <wiced_sleep.h>
@@ -197,9 +195,7 @@ uint32_t wiced_patch_post_config_replacement(int stage)
 {
     if (stage == 4)
     {
-#ifdef BLE_OTA_FW_UPGRADE
         wiced_firmware_upgrade_bootloader();
-#endif
     }
     return 0;
 }
